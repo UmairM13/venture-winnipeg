@@ -42,3 +42,86 @@ Open `http://localhost:3000`.
 - Newsletter signup should use double opt-in and a real unsubscribe workflow before collecting subscribers.
 - High-risk business edits must pass review rather than publishing directly.
 - Obtain qualified Canadian legal advice before public launch.
+
+## Docker development setup
+
+Venture supports a containerised development environment using
+Docker Compose and a local Supabase instance.
+
+### Prerequisites
+
+- Git
+- Node.js 24
+- Docker Desktop (running)
+
+### Start Supabase
+
+From the repository root:
+
+```sh
+npx supabase start
+```
+
+This starts the local Supabase services and applies the database migrations
+on initial setup.
+
+### Configure environment variables
+
+Copy `.env.example` to `.env.local` and populate the Supabase keys
+provided by the Supabase CLI.
+
+```env
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SECRET_KEY=
+```
+
+Never commit `.env.local` or production credentials.
+
+### Start Venture
+
+```sh
+cd docker
+docker compose up -d
+```
+
+Rebuild the application after making code changes:
+
+```sh
+docker compose up --build -d
+```
+
+### Local development services
+
+| Service               | URL                                       |
+| --------------------- | ----------------------------------------- |
+| Venture               | http://localhost:3000                     |
+| Supabase API          | http://127.0.0.1:54321                    |
+| Supabase Studio       | http://127.0.0.1:54323                    |
+| Mailpit               | http://127.0.0.1:54324                    |
+| Supabase health check | http://localhost:3000/api/health/supabase |
+
+### Testing email authentication
+
+1. Open Venture using http://localhost:3000.
+2. Request an email sign-in link.
+3. Open Mailpit to retrieve the email.
+4. Follow the sign-in link in the same browser session.
+
+Always use localhost:3000 when accessing Venture to maintain a
+consistent application origin.
+
+### Stopping the environment
+
+From the docker directory:
+
+```sh
+docker compose down
+```
+
+From the repository root:
+
+```sh
+npx supabase stop
+```

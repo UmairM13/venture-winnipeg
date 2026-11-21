@@ -12,7 +12,7 @@ const PRECACHE = [
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
-  "/icons/maskable-512.png"
+  "/icons/maskable-512.png",
 ];
 
 function isPrivateOrUnsafe(url) {
@@ -45,7 +45,7 @@ async function fetchWithTimeout(request, timeoutMs) {
 
   try {
     return await fetch(request, {
-      signal: controller.signal
+      signal: controller.signal,
     });
   } finally {
     clearTimeout(timer);
@@ -57,19 +57,21 @@ async function cacheSuccessfulResponse(cacheName, request, response) {
     return;
   }
 
+  const responseCopy = response.clone();
+
   const cache = await caches.open(cacheName);
-  await cache.put(request, response.clone());
+  await cache.put(request, responseCopy);
 }
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) =>
-      Promise.all(
-        PRECACHE.map((url) =>
-          cache.add(url).catch(() => undefined)
-        )
-      )
-    )
+    caches
+      .open(SHELL_CACHE)
+      .then((cache) =>
+        Promise.all(
+          PRECACHE.map((url) => cache.add(url).catch(() => undefined)),
+        ),
+      ),
   );
 });
 
@@ -84,12 +86,12 @@ self.addEventListener("activate", (event) => {
               (key) =>
                 key.startsWith("venture-") &&
                 key !== SHELL_CACHE &&
-                key !== RUNTIME_CACHE
+                key !== RUNTIME_CACHE,
             )
-            .map((key) => caches.delete(key))
-        )
+            .map((key) => caches.delete(key)),
+        ),
       )
-      .then(() => self.clients.claim())
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -108,10 +110,7 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
-  if (
-    url.origin !== self.location.origin ||
-    isPrivateOrUnsafe(url)
-  ) {
+  if (url.origin !== self.location.origin || isPrivateOrUnsafe(url)) {
     return;
   }
 
@@ -121,16 +120,12 @@ self.addEventListener("fetch", (event) => {
         try {
           const response = await fetchWithTimeout(
             request,
-            NAVIGATION_TIMEOUT_MS
+            NAVIGATION_TIMEOUT_MS,
           );
 
           if (response.ok) {
             event.waitUntil(
-              cacheSuccessfulResponse(
-                RUNTIME_CACHE,
-                request,
-                response
-              )
+              cacheSuccessfulResponse(RUNTIME_CACHE, request, response),
             );
           }
 
@@ -148,17 +143,14 @@ self.addEventListener("fetch", (event) => {
             return offlinePage;
           }
 
-          return new Response(
-            "Venture is offline. Reconnect and try again.",
-            {
-              status: 503,
-              headers: {
-                "Content-Type": "text/plain; charset=utf-8"
-              }
-            }
-          );
+          return new Response("Venture is offline. Reconnect and try again.", {
+            status: 503,
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8",
+            },
+          });
         }
-      })()
+      })(),
     );
 
     return;
@@ -173,13 +165,9 @@ self.addEventListener("fetch", (event) => {
           event.waitUntil(
             fetch(request)
               .then((response) =>
-                cacheSuccessfulResponse(
-                  RUNTIME_CACHE,
-                  request,
-                  response
-                )
+                cacheSuccessfulResponse(RUNTIME_CACHE, request, response),
               )
-              .catch(() => undefined)
+              .catch(() => undefined),
           );
 
           return cached;
@@ -190,11 +178,7 @@ self.addEventListener("fetch", (event) => {
 
           if (response.ok) {
             event.waitUntil(
-              cacheSuccessfulResponse(
-                RUNTIME_CACHE,
-                request,
-                response
-              )
+              cacheSuccessfulResponse(RUNTIME_CACHE, request, response),
             );
           }
 
@@ -202,7 +186,7 @@ self.addEventListener("fetch", (event) => {
         } catch {
           return new Response("", { status: 504 });
         }
-      })()
+      })(),
     );
   }
 });

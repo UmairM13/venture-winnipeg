@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
+import { supabaseServerFetch } from "./fetch";
 
 export function getSupabaseAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -15,15 +16,18 @@ export function getSupabaseAdminClient() {
 
   if (!secretKey.startsWith("sb_secret_")) {
     throw new Error(
-      "SUPABASE_SECRET_KEY does not appear to contain a valid Supabase secret key."
+      "SUPABASE_SECRET_KEY does not appear to contain a valid Supabase secret key.",
     );
   }
 
   return createClient(url, secretKey, {
+    global: {
+      fetch: supabaseServerFetch,
+    },
     auth: {
       persistSession: false,
       autoRefreshToken: false,
-      detectSessionInUrl: false
-    }
+      detectSessionInUrl: false,
+    },
   });
 }

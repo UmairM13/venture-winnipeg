@@ -33,10 +33,7 @@ function cleanupExpiredEntries(now: number) {
 
 export function getRequestAddress(request: Request) {
   const address =
-    request.headers
-      .get("x-forwarded-for")
-      ?.split(",")[0]
-      ?.trim() ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     request.headers.get("x-real-ip")?.trim() ||
     "unknown";
 
@@ -51,7 +48,11 @@ export function isSameOriginRequest(request: Request) {
   }
 
   try {
-    return origin === new URL(request.url).origin;
+    const expectedOrigin = new URL(
+      process.env.NEXT_PUBLIC_APP_URL?.trim() || request.url,
+    ).origin;
+
+    return origin === expectedOrigin;
   } catch {
     return false;
   }
@@ -60,7 +61,7 @@ export function isSameOriginRequest(request: Request) {
 export function consumeRateLimit({
   key,
   limit,
-  windowMs
+  windowMs,
 }: {
   key: string;
   limit: number;
@@ -94,7 +95,7 @@ export function consumeRateLimit({
 
     entries.set(key, {
       count: 1,
-      resetAt
+      resetAt,
     });
 
     return {
@@ -102,7 +103,7 @@ export function consumeRateLimit({
       limit,
       remaining: Math.max(0, limit - 1),
       resetAt,
-      retryAfterSeconds: Math.max(1, Math.ceil(windowMs / 1000))
+      retryAfterSeconds: Math.max(1, Math.ceil(windowMs / 1000)),
     };
   }
 
@@ -112,10 +113,7 @@ export function consumeRateLimit({
       limit,
       remaining: 0,
       resetAt: current.resetAt,
-      retryAfterSeconds: Math.max(
-        1,
-        Math.ceil((current.resetAt - now) / 1000)
-      )
+      retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000)),
     };
   }
 
@@ -127,10 +125,7 @@ export function consumeRateLimit({
     limit,
     remaining: Math.max(0, limit - current.count),
     resetAt: current.resetAt,
-    retryAfterSeconds: Math.max(
-      1,
-      Math.ceil((current.resetAt - now) / 1000)
-    )
+    retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000)),
   };
 }
 
@@ -141,6 +136,6 @@ export function rateLimitHeaders(result: RateLimitResult) {
     "X-RateLimit-Reset": String(Math.ceil(result.resetAt / 1000)),
     ...(result.allowed
       ? {}
-      : { "Retry-After": String(result.retryAfterSeconds) })
+      : { "Retry-After": String(result.retryAfterSeconds) }),
   };
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { supabaseServerFetch } from "@/lib/supabase/fetch";
 
 export const dynamic = "force-dynamic";
 
@@ -15,28 +16,29 @@ export async function GET() {
         error: "Supabase environment variables are missing.",
         diagnostics: {
           hasUrl: Boolean(url),
-          hasPublishableKey: Boolean(publishableKey)
-        }
+          hasPublishableKey: Boolean(publishableKey),
+        },
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
   try {
     const supabase = createClient(url, publishableKey, {
+      global: {
+        fetch: supabaseServerFetch,
+      },
       auth: {
         persistSession: false,
         autoRefreshToken: false,
-        detectSessionInUrl: false
-      }
+        detectSessionInUrl: false,
+      },
     });
 
-    const { count, error } = await supabase
-      .from("places")
-      .select("id", {
-        count: "exact",
-        head: true
-      });
+    const { count, error } = await supabase.from("places").select("id", {
+      count: "exact",
+      head: true,
+    });
 
     if (error) {
       console.error("Supabase health-check error:", error);
@@ -47,16 +49,16 @@ export async function GET() {
           error: error.message || "Supabase returned an unknown error.",
           code: error.code || null,
           details: error.details || null,
-          hint: error.hint || null
+          hint: error.hint || null,
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     return NextResponse.json({
       ok: true,
       message: "Venture is connected to Supabase.",
-      placesCount: count ?? 0
+      placesCount: count ?? 0,
     });
   } catch (error) {
     console.error("Supabase health-check exception:", error);
@@ -65,11 +67,9 @@ export async function GET() {
       {
         ok: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Unknown connection error."
+          error instanceof Error ? error.message : "Unknown connection error.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

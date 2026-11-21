@@ -1,5 +1,6 @@
 begin;
 
+alter type public.subscriber_status RENAME value 'pending_double_opt_in' TO 'pending';
 alter table public.newsletter_subscribers
   add column if not exists confirmed_at timestamptz,
   add column if not exists confirmation_sent_at timestamptz,

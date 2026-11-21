@@ -2,13 +2,9 @@ import "server-only";
 
 import { reportDataAccessError } from "@/lib/network-errors";
 import { createClient } from "@supabase/supabase-js";
-import type {
-  Listing,
-  VerificationStatus
-} from "@/lib/types";
-import {
-  hasPublishablePhotoRights
-} from "@/lib/media/photo-rights";
+import type { Listing, VerificationStatus } from "@/lib/types";
+import { hasPublishablePhotoRights } from "@/lib/media/photo-rights";
+import { supabaseServerFetch } from "@/lib/supabase/fetch";
 
 export type PlaceRow = {
   id: string;
@@ -41,8 +37,7 @@ type ParsedDayHours = {
   intervals: TimeInterval[];
 };
 
-const WINNIPEG_TIMEZONE =
-  "America/Winnipeg";
+const WINNIPEG_TIMEZONE = "America/Winnipeg";
 
 const weekdayOrder = [
   "sunday",
@@ -51,36 +46,32 @@ const weekdayOrder = [
   "wednesday",
   "thursday",
   "friday",
-  "saturday"
+  "saturday",
 ] as const;
 
 function getPublicSupabaseClient() {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 
   const publishableKey =
-    process.env
-      .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-      ?.trim();
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
 
   if (!url || !publishableKey) {
-    throw new Error(
-      "Supabase public environment variables are missing."
-    );
+    throw new Error("Supabase public environment variables are missing.");
   }
 
   return createClient(url, publishableKey, {
+    global: {
+      fetch: supabaseServerFetch,
+    },
     auth: {
       persistSession: false,
       autoRefreshToken: false,
-      detectSessionInUrl: false
-    }
+      detectSessionInUrl: false,
+    },
   });
 }
 
-function getPriceLabel(
-  priceLevel: number | null
-): string {
+function getPriceLabel(priceLevel: number | null): string {
   if (!priceLevel) {
     return "Price unavailable";
   }
@@ -88,16 +79,12 @@ function getPriceLabel(
   return "$".repeat(priceLevel);
 }
 
-function parseTimeToMinutes(
-  value: unknown
-): number | null {
+function parseTimeToMinutes(value: unknown): number | null {
   if (typeof value !== "string") {
     return null;
   }
 
-  const match = value.match(
-    /^(\d{1,2}):(\d{2})$/
-  );
+  const match = value.match(/^(\d{1,2}):(\d{2})$/);
 
   if (!match) {
     return null;
@@ -106,12 +93,7 @@ function parseTimeToMinutes(
   const hour = Number(match[1]);
   const minute = Number(match[2]);
 
-  if (
-    minute < 0 ||
-    minute > 59 ||
-    hour < 0 ||
-    hour > 24
-  ) {
+  if (minute < 0 || minute > 59 || hour < 0 || hour > 24) {
     return null;
   }
 
@@ -122,61 +104,42 @@ function parseTimeToMinutes(
   return hour * 60 + minute;
 }
 
-function parseDayHours(
-  value: unknown
-): ParsedDayHours {
+function parseDayHours(value: unknown): ParsedDayHours {
   if (Array.isArray(value)) {
-    const parsedItems = value.map(
-      parseDayHours
-    );
+    const parsedItems = value.map(parseDayHours);
 
     return {
       recognized:
-        parsedItems.length === 0 ||
-        parsedItems.some(
-          (item) => item.recognized
-        ),
+        parsedItems.length === 0 || parsedItems.some((item) => item.recognized),
 
-      intervals: parsedItems.flatMap(
-        (item) => item.intervals
-      )
+      intervals: parsedItems.flatMap((item) => item.intervals),
     };
   }
 
-  if (
-    !value ||
-    typeof value !== "object"
-  ) {
+  if (!value || typeof value !== "object") {
     return {
       recognized: false,
-      intervals: []
+      intervals: [],
     };
   }
 
-  const day = value as Record<
-    string,
-    unknown
-  >;
+  const day = value as Record<string, unknown>;
 
   if (day.closed === true) {
     return {
       recognized: true,
-      intervals: []
+      intervals: [],
     };
   }
 
-  const open = parseTimeToMinutes(
-    day.open
-  );
+  const open = parseTimeToMinutes(day.open);
 
-  const close = parseTimeToMinutes(
-    day.close
-  );
+  const close = parseTimeToMinutes(day.close);
 
   if (open === null || close === null) {
     return {
       recognized: false,
-      intervals: []
+      intervals: [],
     };
   }
 
@@ -185,30 +148,21 @@ function parseDayHours(
     intervals: [
       {
         open,
-        close
-      }
-    ]
+        close,
+      },
+    ],
   };
 }
 
 function normalizeWeeklyHours(
-  weeklyHours: unknown
+  weeklyHours: unknown,
 ): Record<string, unknown> | null {
   if (typeof weeklyHours === "string") {
     try {
-      const parsed = JSON.parse(
-        weeklyHours
-      );
+      const parsed = JSON.parse(weeklyHours);
 
-      if (
-        parsed &&
-        typeof parsed === "object" &&
-        !Array.isArray(parsed)
-      ) {
-        return parsed as Record<
-          string,
-          unknown
-        >;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
       }
     } catch {
       return null;
@@ -220,10 +174,7 @@ function normalizeWeeklyHours(
     typeof weeklyHours === "object" &&
     !Array.isArray(weeklyHours)
   ) {
-    return weeklyHours as Record<
-      string,
-      unknown
-    >;
+    return weeklyHours as Record<string, unknown>;
   }
 
   return null;
@@ -233,186 +184,119 @@ function getWinnipegTime(): {
   weekday: string;
   minutes: number;
 } {
-  const parts =
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: WINNIPEG_TIMEZONE,
-      weekday: "long",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23"
-    }).formatToParts(new Date());
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: WINNIPEG_TIMEZONE,
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
 
   const weekday =
-    parts
-      .find(
-        (part) =>
-          part.type === "weekday"
-      )
-      ?.value.toLowerCase() ??
+    parts.find((part) => part.type === "weekday")?.value.toLowerCase() ??
     "monday";
 
-  const hour = Number(
-    parts.find(
-      (part) => part.type === "hour"
-    )?.value ?? 0
-  );
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
 
   const minute = Number(
-    parts.find(
-      (part) => part.type === "minute"
-    )?.value ?? 0
+    parts.find((part) => part.type === "minute")?.value ?? 0,
   );
 
   return {
     weekday,
-    minutes: hour * 60 + minute
+    minutes: hour * 60 + minute,
   };
 }
 
-function getPreviousWeekday(
-  weekday: string
-): string {
-  const weekdayIndex =
-    weekdayOrder.indexOf(
-      weekday as
-        (typeof weekdayOrder)[number]
-    );
+function getPreviousWeekday(weekday: string): string {
+  const weekdayIndex = weekdayOrder.indexOf(
+    weekday as (typeof weekdayOrder)[number],
+  );
 
   if (weekdayIndex === -1) {
     return "sunday";
   }
 
-  return weekdayOrder[
-    (weekdayIndex - 1 + 7) % 7
-  ];
+  return weekdayOrder[(weekdayIndex - 1 + 7) % 7];
 }
 
-function calculateIsOpenNow(
-  weeklyHoursValue: unknown
-): boolean | null {
-  const weeklyHours =
-    normalizeWeeklyHours(
-      weeklyHoursValue
-    );
+function calculateIsOpenNow(weeklyHoursValue: unknown): boolean | null {
+  const weeklyHours = normalizeWeeklyHours(weeklyHoursValue);
 
   if (!weeklyHours) {
     return null;
   }
 
-  const {
-    weekday,
-    minutes
-  } = getWinnipegTime();
+  const { weekday, minutes } = getWinnipegTime();
 
-  const previousWeekday =
-    getPreviousWeekday(weekday);
+  const previousWeekday = getPreviousWeekday(weekday);
 
-  const currentDay = parseDayHours(
-    weeklyHours[weekday]
-  );
+  const currentDay = parseDayHours(weeklyHours[weekday]);
 
-  const previousDay = parseDayHours(
-    weeklyHours[previousWeekday]
-  );
+  const previousDay = parseDayHours(weeklyHours[previousWeekday]);
 
-  for (
-    const interval of
-    currentDay.intervals
-  ) {
-    const {
-      open,
-      close
-    } = interval;
+  for (const interval of currentDay.intervals) {
+    const { open, close } = interval;
 
-    if (
-      close > open &&
-      minutes >= open &&
-      minutes < close
-    ) {
+    if (close > open && minutes >= open && minutes < close) {
       return true;
     }
 
     // Example: 6:00 p.m. to 2:00 a.m.
-    if (
-      close <= open &&
-      minutes >= open
-    ) {
+    if (close <= open && minutes >= open) {
       return true;
     }
   }
 
   // Check whether yesterday's hours
   // continue past midnight into today.
-  for (
-    const interval of
-    previousDay.intervals
-  ) {
-    const {
-      open,
-      close
-    } = interval;
+  for (const interval of previousDay.intervals) {
+    const { open, close } = interval;
 
-    if (
-      close <= open &&
-      minutes < close
-    ) {
+    if (close <= open && minutes < close) {
       return true;
     }
   }
 
-  if (
-    currentDay.recognized ||
-    previousDay.recognized
-  ) {
+  if (currentDay.recognized || previousDay.recognized) {
     return false;
   }
 
   return null;
 }
 
-function getCurrentOpenStatus(
-  place: PlaceRow
-): {
+function getCurrentOpenStatus(place: PlaceRow): {
   label: string;
   tone: Listing["statusTone"];
   details: string;
   isOpenNow: boolean | null;
 } {
-  if (
-    place.open_status ===
-    "temporarily_closed"
-  ) {
+  if (place.open_status === "temporarily_closed") {
     return {
       label: "TEMPORARILY CLOSED",
       tone: "orange",
       details: "Temporarily closed",
-      isOpenNow: false
+      isOpenNow: false,
     };
   }
 
-  if (
-    place.open_status ===
-    "permanently_closed"
-  ) {
+  if (place.open_status === "permanently_closed") {
     return {
       label: "CLOSED",
       tone: "orange",
       details: "Permanently closed",
-      isOpenNow: false
+      isOpenNow: false,
     };
   }
 
-  const isOpenNow =
-    calculateIsOpenNow(
-      place.weekly_hours
-    );
+  const isOpenNow = calculateIsOpenNow(place.weekly_hours);
 
   if (isOpenNow === true) {
     return {
       label: "OPEN NOW",
       tone: "green",
       details: "Open now",
-      isOpenNow: true
+      isOpenNow: true,
     };
   }
 
@@ -421,7 +305,7 @@ function getCurrentOpenStatus(
       label: "CLOSED NOW",
       tone: "orange",
       details: "Closed now",
-      isOpenNow: false
+      isOpenNow: false,
     };
   }
 
@@ -429,50 +313,36 @@ function getCurrentOpenStatus(
     label: "HOURS UNKNOWN",
     tone: "amber",
     details: "Hours not confirmed",
-    isOpenNow: null
+    isOpenNow: null,
   };
 }
 
-function getLastCheckedLabel(
-  sourceCheckedAt: string | null
-): string {
+function getLastCheckedLabel(sourceCheckedAt: string | null): string {
   if (!sourceCheckedAt) {
     return "Source check pending";
   }
 
-  const formattedDate =
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: WINNIPEG_TIMEZONE,
-      month: "short",
-      day: "numeric"
-    }).format(
-      new Date(sourceCheckedAt)
-    );
+  const formattedDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: WINNIPEG_TIMEZONE,
+    month: "short",
+    day: "numeric",
+  }).format(new Date(sourceCheckedAt));
 
   return `Checked ${formattedDate}`;
 }
 
-export function convertPlaceToListing(
-  place: PlaceRow
-): Listing {
+export function convertPlaceToListing(place: PlaceRow): Listing {
   const approvedImageUrl =
-    place.image_url &&
-    hasPublishablePhotoRights(
-      place.image_rights_notes
-    )
+    place.image_url && hasPublishablePhotoRights(place.image_rights_notes)
       ? place.image_url
       : null;
-  const price = getPriceLabel(
-    place.price_level
-  );
+  const price = getPriceLabel(place.price_level);
 
-  const currentOpenStatus =
-    getCurrentOpenStatus(place);
+  const currentOpenStatus = getCurrentOpenStatus(place);
 
   const subtitleParts = [
-    place.cuisine_primary ??
-      place.primary_category,
-    price
+    place.cuisine_primary ?? place.primary_category,
+    price,
   ];
 
   return {
@@ -482,67 +352,47 @@ export function convertPlaceToListing(
     name: place.name,
     category: place.primary_category,
 
-    subtitle:
-      subtitleParts.join(" · "),
+    subtitle: subtitleParts.join(" · "),
 
-    statusLabel:
-      currentOpenStatus.label,
+    statusLabel: currentOpenStatus.label,
 
-    statusTone:
-      currentOpenStatus.tone,
+    statusTone: currentOpenStatus.tone,
 
-    timeOrHours:
-      currentOpenStatus.details,
+    timeOrHours: currentOpenStatus.details,
 
-    isOpenNow:
-      currentOpenStatus.isOpenNow,
+    isOpenNow: currentOpenStatus.isOpenNow,
 
     price,
 
-    distance:
-      place.neighbourhood ??
-      "Winnipeg",
+    distance: place.neighbourhood ?? "Winnipeg",
 
-    verification:
-      place.verification_status,
+    verification: place.verification_status,
 
-    lastChecked:
-      getLastCheckedLabel(
-        place.source_checked_at
-      ),
+    lastChecked: getLastCheckedLabel(place.source_checked_at),
 
-    imageClass:
-      approvedImageUrl
-        ? "image-uploaded"
-        : "image-food",
+    imageClass: approvedImageUrl ? "image-uploaded" : "image-food",
 
     imageUrl: approvedImageUrl,
 
-    neighbourhood:
-      place.neighbourhood ??
-      "Winnipeg",
+    neighbourhood: place.neighbourhood ?? "Winnipeg",
 
-    description:
-      place.short_description,
+    description: place.short_description,
 
     latitude: place.latitude,
     longitude: place.longitude,
 
-    placeType:
-      place.place_type,
+    placeType: place.place_type,
 
-    weeklyHours:
-      place.weekly_hours,
+    weeklyHours: place.weekly_hours,
 
-    priceLevel:
-      place.price_level,
+    priceLevel: place.price_level,
 
     searchTerms: [
       place.primary_category,
       place.cuisine_primary ?? "",
       place.place_type,
-      place.neighbourhood ?? ""
-    ].filter(Boolean)
+      place.neighbourhood ?? "",
+    ].filter(Boolean),
   };
 }
 
@@ -568,71 +418,55 @@ export const placeFields = `
   `;
 
 export async function getPublishedPlaceListings(
-  limit = 10
+  limit = 10,
 ): Promise<Listing[]> {
-  const supabase =
-    getPublicSupabaseClient();
+  const supabase = getPublicSupabaseClient();
 
-  const { data, error } =
-    await supabase
-      .from("places")
-      .select(placeFields)
-      .eq("status", "published")
-      .neq(
-        "place_type",
-        "event_venue"
-      )
-      .in("place_type", [
-        "restaurant",
-        "cafe",
-        "bakery_dessert",
-        "bar_pub",
-        "brewery",
-        "food_truck",
-        "fast_casual",
-        "fine_dining",
-        "late_night_food",
-        "market"
-      ])
-      .order("published_at", {
-        ascending: false
-      })
-      .limit(limit);
+  const { data, error } = await supabase
+    .from("places")
+    .select(placeFields)
+    .eq("status", "published")
+    .neq("place_type", "event_venue")
+    .in("place_type", [
+      "restaurant",
+      "cafe",
+      "bakery_dessert",
+      "bar_pub",
+      "brewery",
+      "food_truck",
+      "fast_casual",
+      "fine_dining",
+      "late_night_food",
+      "market",
+    ])
+    .order("published_at", {
+      ascending: false,
+    })
+    .limit(limit);
 
   if (error) {
-    reportDataAccessError(
-      "Unable to load Venture places",
-      error
-    );
+    reportDataAccessError("Unable to load Venture places", error);
 
     return [];
   }
 
-  return (
-    (data ?? []) as unknown as
-      PlaceRow[]
-  ).map(convertPlaceToListing);
+  return ((data ?? []) as unknown as PlaceRow[]).map(convertPlaceToListing);
 }
 
 export async function getPublishedPlaceListingBySlug(
-  slug: string
+  slug: string,
 ): Promise<Listing | null> {
-  const supabase =
-    getPublicSupabaseClient();
+  const supabase = getPublicSupabaseClient();
 
-  const { data, error } =
-    await supabase
-      .from("places")
-      .select(placeFields)
-      .eq("slug", slug)
-      .eq("status", "published")
-      .maybeSingle();
+  const { data, error } = await supabase
+    .from("places")
+    .select(placeFields)
+    .eq("slug", slug)
+    .eq("status", "published")
+    .maybeSingle();
 
   if (error) {
-    reportDataAccessError(
-      "Unable to load Venture place",
-      error
-    );
+    reportDataAccessError("Unable to load Venture place", error);
 
     return null;
   }
@@ -641,7 +475,5 @@ export async function getPublishedPlaceListingBySlug(
     return null;
   }
 
-  return convertPlaceToListing(
-    data as unknown as PlaceRow
-  );
+  return convertPlaceToListing(data as unknown as PlaceRow);
 }
